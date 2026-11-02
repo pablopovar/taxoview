@@ -1,0 +1,70 @@
+{
+  "category": "Plantas",
+  "fields": [
+    {
+      "id": "name",
+      "type": "name",
+      "label": "Nombres"
+    },
+    {
+      "id": "location",
+      "type": "location",
+      "label": "Ubicaciones"
+    },
+    {
+      "id": "pictures",
+      "type": "pictures",
+      "label": "Imágenes"
+    },
+    {
+      "id": "description",
+      "type": "description",
+      "label": "Descripción"
+    },
+    {
+      "id": "taxonomy",
+      "type": "taxonomy",
+      "label": "Taxonomía"
+    },
+    {
+      "id": "interaction",
+      "type": "interaction",
+      "label": "Perfil de interacción"
+    }
+  ],
+  "items": [
+    {
+      "id": "planta-neltuma-alba",
+      "name": [
+        "Algarrobo blanco",
+        "Algarrobo",
+        "Neltuma alba",
+        "Prosopis alba"
+      ],
+      "location": "Bosques nativos y áreas rurales de Córdoba, incluidos sectores del entorno de La Calera y los valles serranos; buscar en ambientes de monte y piedemonte.",
+      "pictures": [],
+      "description": "Árbol nativo cuyos frutos o vainas tienen uso alimentario tradicional en la ruralidad cordobesa. Neltuma alba es el nombre científico actual; Prosopis alba aparece en bibliografía anterior."
+    },
+    {
+      "id": "planta-geoffroea-decorticans",
+      "name": [
+        "Chañar",
+        "Geoffroea decorticans"
+      ],
+      "location": "Monte y sectores bajos de Córdoba; registrado como planta alimenticia en la ruralidad de La Calera. Su presencia varía por hábitat dentro del área marcada.",
+      "pictures": [],
+      "description": "Árbol nativo de frutos tradicionalmente usados para preparar arrope y otros alimentos. La bibliografía etnobotánica cordobesa documenta su uso alimentario en La Calera y otras localidades."
+    },
+    {
+      "id": "planta-celtis-ehrenbergiana",
+      "name": [
+        "Tala",
+        "Tala común",
+        "Celtis ehrenbergiana"
+      ],
+      "location": "Bosques y montes nativos de Córdoba, incluido el entorno rural de La Calera; buscar en sectores de bosque serrano y piedemonte.",
+      "pictures": [],
+      "description": "Árbol o arbusto nativo del monte cordobés. La bibliografía de La Calera recoge conocimiento local de sus frutos; los nombres vernáculos y los usos pueden variar entre localidades."
+    }
+  ]
+}

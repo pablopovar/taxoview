@@ -1,0 +1,14 @@
+{
+  "order": [
+    "mushrooms",
+    "herbs-and-teas",
+    "plants",
+    "fauna"
+  ],
+  "collapsed": [
+    "plants",
+    "fauna",
+    "mushrooms"
+  ],
+  "stacksHidden": false
+}
