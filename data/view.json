@@ -1,0 +1,12 @@
+{
+  "order": [
+    "name",
+    "location",
+    "description",
+    "pictures"
+  ],
+  "collapsed": [
+    "name",
+    "location"
+  ]
+}

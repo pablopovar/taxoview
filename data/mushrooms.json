@@ -1,0 +1,75 @@
+{
+  "category": "Hongos",
+  "fields": [
+    {
+      "id": "name",
+      "type": "name",
+      "label": "Nombres"
+    },
+    {
+      "id": "location",
+      "type": "location",
+      "label": "Ubicaciones"
+    },
+    {
+      "id": "pictures",
+      "type": "pictures",
+      "label": "Imágenes"
+    },
+    {
+      "id": "description",
+      "type": "description",
+      "label": "Descripción"
+    },
+    {
+      "id": "coordinates",
+      "type": "coordinates",
+      "label": "Coordenadas"
+    },
+    {
+      "id": "taxonomy",
+      "type": "taxonomy",
+      "label": "Taxonomía"
+    },
+    {
+      "id": "interaction",
+      "type": "interaction",
+      "label": "Perfil de interacción"
+    }
+  ],
+  "items": [
+    {
+      "id": "hongo-phlebopus-bruchii",
+      "name": [
+        "Hongo de coco",
+        "Hongo de molle",
+        "Phlebopus bruchii"
+      ],
+      "location": "Sierras de Córdoba; asociado a bosques serranos maduros con coco y molle. La referencia es regional: no confirma un sitio puntual dentro de Punilla.",
+      "pictures": [],
+      "description": "Hongo silvestre nativo citado para las sierras cordobesas y reconocido como comestible en fuentes argentinas. Especie de interés para observación e identificación cuidadosa; este registro no confirma presencia en un punto específico."
+    },
+    {
+      "id": "hongo-suillus-granulatus",
+      "name": [
+        "Hongo de pino",
+        "Boleto granulado",
+        "Suillus granulatus"
+      ],
+      "location": "Pinares de las Sierras de Córdoba. Buscar como posibilidad en plantaciones de pino del área Punilla; la fuente confirma la región serrana, no cada rodal.",
+      "pictures": [],
+      "description": "Hongo asociado a pinos, citado en pinares de las sierras cordobesas y listado entre los hongos comestibles silvestres. La presencia depende de encontrar pinos y condiciones estacionales adecuadas."
+    },
+    {
+      "id": "hongo-lactarius-deliciosus",
+      "name": [
+        "Níscalo",
+        "Rovellón",
+        "Lactarius deliciosus"
+      ],
+      "location": "Pinares de las Sierras de Córdoba. Posible en sectores con pinos de Punilla; registro regional, no una localización confirmada de recolección.",
+      "pictures": [],
+      "description": "Hongo asociado a pinares, documentado para las sierras de Córdoba. Las fuentes indican fructificación principalmente otoñal, dependiente de las lluvias, y advierten que puede confundirse con especies tóxicas; la identificación de campo requiere confirmación experta."
+    }
+  ]
+}

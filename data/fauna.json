@@ -1,0 +1,36 @@
+{
+  "category": "Fauna",
+  "fields": [
+    {
+      "id": "name",
+      "type": "name",
+      "label": "Nombres"
+    },
+    {
+      "id": "location",
+      "type": "location",
+      "label": "Ubicaciones"
+    },
+    {
+      "id": "pictures",
+      "type": "pictures",
+      "label": "Imágenes"
+    },
+    {
+      "id": "description",
+      "type": "description",
+      "label": "Descripción"
+    },
+    {
+      "id": "taxonomy",
+      "type": "taxonomy",
+      "label": "Taxonomía"
+    },
+    {
+      "id": "interaction",
+      "type": "interaction",
+      "label": "Perfil de interacción"
+    }
+  ],
+  "items": []
+}
