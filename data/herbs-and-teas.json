@@ -32,39 +32,5 @@
       "label": "Perfil de interacción"
     }
   ],
-  "items": [
-    {
-      "id": "hierba-minthostachys-verticillata",
-      "name": [
-        "Peperina",
-        "Menta peperina",
-        "Minthostachys verticillata",
-        "Minthostachys mollis"
-      ],
-      "location": "Sierras y departamento Santa María, Córdoba; hierba serrana recolectada en la región. La distribución exacta en Punilla requiere observación local.",
-      "pictures": [],
-      "description": "Aromática nativa de uso tradicional en infusiones. La literatura botánica y etnobotánica registra peperina entre las hierbas recolectadas en Córdoba; aparece también bajo el nombre científico Minthostachys mollis en fuentes anteriores."
-    },
-    {
-      "id": "hierba-lippia-turbinata",
-      "name": [
-        "Poleo",
-        "Lippia turbinata"
-      ],
-      "location": "Departamento Santa María y otras zonas de Córdoba; registrada entre las hierbas medicinales recolectadas y comercializadas localmente.",
-      "pictures": [],
-      "description": "Arbusto aromático conocido como poleo y usado tradicionalmente en infusiones. El estudio regional de Santa María lo incluye entre las especies de alta demanda."
-    },
-    {
-      "id": "hierba-baccharis-articulata",
-      "name": [
-        "Carqueja",
-        "Carquejilla",
-        "Baccharis articulata"
-      ],
-      "location": "Departamento Santa María, Córdoba; registrada entre las hierbas recolectadas en la zona. Puede aparecer en ambientes abiertos y serranos; confirmar rodales en campo.",
-      "pictures": [],
-      "description": "Arbusto nativo conocido como carqueja y recolectado para usos tradicionales. El estudio de Santa María la identifica entre las especies de alta demanda; el registro no constituye una recomendación medicinal."
-    }
-  ]
+  "items": []
 }

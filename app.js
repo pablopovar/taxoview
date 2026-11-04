@@ -113,6 +113,10 @@ let activeCategoryId = null;
 let editingId = null;
 let removedAssets = new Map();
 let messageTimer;
+let taxonSearchTimer;
+let formTaxonName = "";
+let formTaxonRecord = null;
+let formTaxonPending = null;
 const board = document.getElementById("category-board");
 const dialog = document.getElementById("item-dialog");
 const form = document.getElementById("item-form");
@@ -185,6 +189,10 @@ function orderedCategories() {
   return result;
 }
 function render() {
+  const speciesPage = document.getElementById("species-page");
+  const detailMatch = location.hash.match(/^#species\/([^/]+)\/([^/]+)$/);
+  document.querySelector(".category-board-wrap").hidden = Boolean(detailMatch);
+  speciesPage.hidden = !detailMatch;
   board.replaceChildren();
   const ordered = orderedCategories();
   const visible = ordered.filter((category) => !(categoryView.stacksHidden && categoryView.collapsed.includes(category.id)));
@@ -205,6 +213,7 @@ function render() {
     if (visible.includes(category)) board.append(renderCategory(category, items));
   });
   document.getElementById("item-count").textContent = ordered.length + (ordered.length === 1 ? " categoría · " : " categorías · ") + totalItems + (totalItems === 1 ? " registro" : " registros");
+  if (detailMatch) renderSpeciesPage(decodeURIComponent(detailMatch[1]), decodeURIComponent(detailMatch[2]));
 }
 function renderCategory(category, items) {
   const collapsed = categoryView.collapsed.includes(category.id);
@@ -252,7 +261,8 @@ function renderCategory(category, items) {
 function renderEntry(category, record) {
   const card = document.createElement("details");
   card.className = "entry-card item-card";
-  card.open = !collapsedRecords.has(record.id);
+  card.dataset.recordId = record.id;
+  card.open = collapsedRecords.has(record.id);
   const summary = document.createElement("summary");
   summary.className = "entry-card-summary";
   const nameField = (category.fields || []).find((field) => field.type === "name");
@@ -263,7 +273,8 @@ function renderEntry(category, record) {
   });
   const fallbackValue = fallbackField ? record[fallbackField.id] : "";
   const titleText = primaryName || (Array.isArray(fallbackValue) ? fallbackValue[0] : fallbackValue) || "Registro";
-  const title = document.createElement("span"); title.className = "entry-record-title"; title.textContent = titleText;
+  const title = document.createElement("a"); title.className = "entry-record-title"; title.href = "#species/" + encodeURIComponent(category.id) + "/" + encodeURIComponent(record.id); title.textContent = titleText;
+  title.addEventListener("click", (event) => { event.stopPropagation(); });
   const indicator = document.createElement("span"); indicator.className = "entry-record-indicator"; indicator.setAttribute("aria-hidden", "true");
   summary.append(title, indicator); card.append(summary);
   card.addEventListener("toggle", () => {
@@ -302,8 +313,16 @@ function toggleSideStacks() {
   saveCategoryView();
 }
 async function request(path, options = {}) {
-  const response = await fetch(path, options); const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "No se pudo completar la solicitud."); return result;
+  const response = await fetch(path, options);
+  const body = await response.text();
+  let result;
+  try { result = JSON.parse(body); }
+  catch {
+    const contentType = response.headers.get("content-type") || "respuesta sin tipo de contenido";
+    throw new Error("El servidor respondió algo que no es JSON (HTTP " + response.status + ", " + contentType + "). Intentá de nuevo.");
+  }
+  if (!response.ok) throw new Error(result.error || "No se pudo completar la solicitud.");
+  return result;
 }
 async function saveDataset(categoryId) {
   const data = datasets.get(categoryId);
@@ -337,6 +356,7 @@ function fieldControl(field, record) {
     ranks.forEach(([key, labelText]) => {
       const label = document.createElement("label"); label.className = "taxonomy-rank"; label.textContent = labelText;
       const input = document.createElement("input"); input.type = "text"; input.value = path[key] || ""; input.dataset.taxonomyRank = key; input.setAttribute("aria-label", labelText);
+      if (key === "species") { input.required = true; input.placeholder = "Obligatoria"; }
       const listId = "taxonomy-choices-" + field.id.replace(/[^a-zA-Z0-9_-]/g, "-") + "-" + key;
       const choices = new Set();
       datasets.forEach((dataset) => (dataset.items || []).forEach((item) => {
@@ -373,9 +393,257 @@ function fieldControl(field, record) {
     input.placeholder = field.type === "name" ? "Un valor por línea" : "Agregar " + (field.label || FIELD_TYPE_NAMES[field.type]).toLowerCase();
     if (field.type === "name") input.value = (Array.isArray(value) ? value : []).join("\n");
     else input.value = value || "";
+    if (field.type === "name") input.addEventListener("change", () => populateExactTaxon(input.value.split("\n")[0].trim(), field));
     wrap.append(input);
   }
   return wrap;
+}
+async function searchTaxa(query) {
+  if (!query || query.trim().length < 2) return [];
+  return request("/api/taxa/search?q=" + encodeURIComponent(query.trim()));
+}
+function matchingTaxonomyField() {
+  const category = categories.find((item) => item.id === activeCategoryId);
+  return (category?.fields || []).find((field) => field.type === "taxonomy");
+}
+function findLocalTaxa(query) {
+  const normalized = query.toLocaleLowerCase();
+  const matches = [];
+  categories.forEach((category) => {
+    const nameField = (category.fields || []).find((field) => field.type === "name");
+    const taxonomyField = (category.fields || []).find((field) => field.type === "taxonomy");
+    (datasets.get(category.id)?.items || []).forEach((record) => {
+      const names = nameField && Array.isArray(record[nameField.id]) ? record[nameField.id] : [];
+      const scientific = taxonomyField && record[taxonomyField.id]?.species;
+      if ([...names, scientific].filter(Boolean).some((name) => String(name).toLocaleLowerCase().includes(normalized))) {
+        matches.push({ category, record, name: scientific || names[0] || "Especie" });
+      }
+    });
+  });
+  return matches;
+}
+function findExactLocalTaxa(query) {
+  const normalized = query.toLocaleLowerCase();
+  return categories.flatMap((category) => {
+    const nameField = (category.fields || []).find((field) => field.type === "name");
+    const taxonomyField = (category.fields || []).find((field) => field.type === "taxonomy");
+    return (datasets.get(category.id)?.items || []).filter((record) => {
+      const names = nameField && Array.isArray(record[nameField.id]) ? record[nameField.id] : [];
+      return [...names, taxonomyField && record[taxonomyField.id]?.species].filter(Boolean).some((name) => String(name).toLocaleLowerCase() === normalized);
+    }).map((record) => ({ category, record, name: (taxonomyField && record[taxonomyField.id]?.species) || (nameField && record[nameField.id]?.[0]) || "Especie" }));
+  });
+}
+function showTaxonMessage(message) {
+  const node = document.createElement("p"); node.className = "taxon-result-rank"; node.textContent = message; taxonResults.append(node);
+}
+function addTaxonResult(taxon, actionText, action) {
+  const row = document.createElement("div"); row.className = "taxon-result";
+  const label = document.createElement("div");
+  const name = document.createElement("span"); name.className = "taxon-result-name"; name.textContent = taxon.name;
+  const rank = document.createElement("span"); rank.className = "taxon-result-rank"; rank.textContent = [taxon.common_name, taxon.rank, taxon.matched_term && "Coincidencia: " + taxon.matched_term].filter(Boolean).join(" · ");
+  label.append(name, rank);
+  const button = document.createElement("button"); button.type = "button"; button.className = "button button-quiet"; button.textContent = actionText;
+  button.addEventListener("click", async () => {
+    if (button.disabled) return;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = originalText.includes("Agregar") ? "Recuperando datos…" : "Abriendo…";
+    row.setAttribute("aria-busy", "true");
+    try {
+      await action();
+      button.textContent = "Listo";
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = originalText;
+      row.removeAttribute("aria-busy");
+      showMessage(error.message || "No se pudo agregar la especie.", true);
+    }
+  });
+  row.append(label, button); taxonResults.append(row);
+}
+async function accessLocalTaxon(categoryId, recordId) {
+  categoryView.collapsed = categoryView.collapsed.filter((id) => id !== categoryId); categoryView.stacksHidden = false;
+  collapsedRecords.delete(recordId); render(); await saveCategoryView();
+  const column = document.querySelector('.category-column[data-category="' + CSS.escape(categoryId) + '"]');
+  const recordCard = column?.querySelector('.entry-card[data-record-id="' + CSS.escape(recordId) + '"]');
+  if (recordCard) { recordCard.open = true; recordCard.scrollIntoView({ behavior: "smooth", block: "center" }); recordCard.classList.add("taxon-highlight"); setTimeout(() => recordCard.classList.remove("taxon-highlight"), 1800); }
+  taxonResults.hidden = true;
+}
+function openSpeciesPage(categoryId, recordId) {
+  taxonResults.hidden = true;
+  location.hash = "species/" + encodeURIComponent(categoryId) + "/" + encodeURIComponent(recordId);
+}
+function dataSection(title, contents) {
+  const section = document.createElement("section"); section.className = "species-section";
+  const heading = document.createElement("h2"); heading.textContent = title; section.append(heading);
+  if (contents instanceof Node) section.append(contents); else { const text = document.createElement("p"); text.textContent = contents || "Sin datos disponibles."; section.append(text); }
+  return section;
+}
+function renderSpeciesPage(categoryId, recordId) {
+  const page = document.getElementById("species-page"); page.replaceChildren();
+  const category = categories.find((item) => item.id === categoryId);
+  const record = datasets.get(categoryId)?.items.find((item) => item.id === recordId);
+  if (!category || !record) {
+    const back = document.createElement("a"); back.href = "#"; back.className = "text-button"; back.textContent = "← Volver a la colección"; page.append(back, dataSection("Registro no encontrado", "No se encontró este registro en la colección local.")); return;
+  }
+  const nameField = category.fields.find((field) => field.type === "name");
+  const taxonomyField = category.fields.find((field) => field.type === "taxonomy");
+  const names = nameField && Array.isArray(record[nameField.id]) ? record[nameField.id] : [];
+  const detail = record.inaturalist || {};
+  const title = document.createElement("h1"); title.textContent = names[0] || record[taxonomyField?.id]?.species || "Especie";
+  const back = document.createElement("a"); back.href = "#"; back.className = "text-button"; back.textContent = "← Volver a la colección";
+  const source = document.createElement("a"); source.href = detail.source_url || detail.url || "https://www.inaturalist.org/taxa/" + record.inaturalist_id; source.target = "_blank"; source.rel = "noreferrer"; source.textContent = "Ver taxón en iNaturalist";
+  const intro = document.createElement("header"); intro.className = "species-heading"; intro.append(back, title, source); page.append(intro);
+  page.append(dataSection("Nombres", names.length ? names.join(" · ") : "Sin nombres disponibles."));
+  const taxonomyBox = document.createElement("div");
+  const taxonomyRenderer = FIELD_TYPES.taxonomy;
+  taxonomyRenderer.render(record[taxonomyField?.id] || detail.taxonomy || {}, taxonomyBox);
+  const rank = document.createElement("p"); rank.textContent = "Rango: " + (detail.rank || "sin dato"); taxonomyBox.append(rank);
+  page.append(dataSection("Taxonomía", taxonomyBox));
+  const statuses = Array.isArray(detail.conservation_statuses) ? detail.conservation_statuses : [];
+  const statusText = statuses.map((item) => [item.status_name || item.status, item.authority, typeof item.place === "object" ? item.place?.name : item.place].filter(Boolean).join(" · ")).filter(Boolean).join("\n");
+  page.append(dataSection("Estado de conservación", statusText || "Sin estado de conservación registrado."));
+  const observations = Array.isArray(detail.observations) ? detail.observations : [];
+  const photos = [...(detail.photos || []), ...observations.flatMap((observation) => observation.photos || [])];
+  const gallery = document.createElement("div"); gallery.className = "species-gallery";
+  [...new Map(photos.filter((photo) => photo.url).map((photo) => [photo.url, photo])).values()].forEach((photo) => {
+    const figure = document.createElement("figure"); const link = document.createElement("a"); link.href = photo.url; link.target = "_blank"; link.rel = "noreferrer";
+    const image = document.createElement("img"); image.src = photo.url; image.loading = "lazy"; image.decoding = "async"; image.alt = "Fotografía de " + title.textContent; link.append(image); figure.append(link);
+    const caption = document.createElement("figcaption"); caption.textContent = [photo.attribution, photo.license].filter(Boolean).join(" · ") || "iNaturalist"; figure.append(caption); gallery.append(figure);
+  });
+  page.append(dataSection("Imágenes", gallery.childElementCount ? gallery : "No hay imágenes en iNaturalist."));
+  const datedCounts = new Map((detail.seasonality || []).map((item) => [item.day, item.count]));
+  const season = document.createElement("div"); season.className = "seasonality-grid";
+  const monthNames = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  for (let month = 1; month <= 12; month++) {
+    const block = document.createElement("section"); const heading = document.createElement("h3"); heading.textContent = monthNames[month - 1]; block.append(heading);
+    const days = document.createElement("p");
+    const found = [...datedCounts.entries()].filter(([key]) => Number(key.slice(0, 2)) === month).map(([key, count]) => key.slice(3) + " (" + count + ")");
+    days.textContent = found.length ? found.join(" · ") : "Sin registros"; block.append(days); season.append(block);
+  }
+  page.append(dataSection("Días del año con observaciones", season));
+  const mapSection = document.createElement("section"); mapSection.className = "species-section";
+  const mapTitle = document.createElement("h2"); mapTitle.textContent = "Avistamientos en el mapa"; mapSection.append(mapTitle);
+  const map = document.createElement("div"); map.id = "species-observation-map"; map.className = "species-map"; mapSection.append(map);
+  const count = document.createElement("p"); count.textContent = observations.length + " observaciones con fechas recuperadas" + (detail.observations_truncated ? " (iNaturalist informó más; se guardó el máximo disponible por consulta)." : "."); mapSection.append(count);
+  const observationList = document.createElement("ul"); observationList.className = "observation-list";
+  observations.forEach((observation) => {
+    const item = document.createElement("li");
+    const link = document.createElement("a"); link.href = observation.url; link.target = "_blank"; link.rel = "noreferrer"; link.textContent = observation.observed_on || "Observación";
+    const annotations = (observation.annotations || []).map((annotation) => [annotation.attribute, annotation.value].filter(Boolean).join(": ")).filter(Boolean);
+    item.append(link); if (annotations.length) { const note = document.createElement("span"); note.textContent = " · " + annotations.join("; "); item.append(note); }
+    observationList.append(item);
+  });
+  mapSection.append(observationList); page.append(mapSection);
+  if (window.L && observations.some((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))) {
+    const points = observations.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+    const mapView = L.map(map, { scrollWheelZoom: false }).setView([points[0].latitude, points[0].longitude], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(mapView);
+    const markers = L.markerClusterGroup ? L.markerClusterGroup() : L.layerGroup();
+    points.forEach((point) => {
+      const annotations = (point.annotations || []).map((annotation) => [annotation.attribute, annotation.value].filter(Boolean).join(": ")).filter(Boolean).join("; ");
+      const popup = document.createElement("div"); const link = document.createElement("a"); link.href = point.url; link.target = "_blank"; link.rel = "noreferrer"; link.textContent = point.observed_on || "Observación"; popup.append(link);
+      if (annotations) { const text = document.createElement("p"); text.textContent = annotations; popup.append(text); }
+      markers.addLayer(L.marker([point.latitude, point.longitude]).bindPopup(popup));
+    });
+    mapView.addLayer(markers); if (points.length > 1) mapView.fitBounds(markers.getBounds().pad(0.1));
+  } else map.textContent = "No hay coordenadas públicas para mostrar en el mapa.";
+}
+window.addEventListener("hashchange", render);
+async function populateExactTaxon(name) {
+  if (!name) return;
+  if (formTaxonName.toLocaleLowerCase() === name.toLocaleLowerCase() && formTaxonRecord) return formTaxonRecord;
+  if (formTaxonName.toLocaleLowerCase() === name.toLocaleLowerCase() && formTaxonPending) return formTaxonPending;
+  const field = matchingTaxonomyField(); if (!field) return;
+  formTaxonName = name;
+  formTaxonPending = (async () => { try {
+    const taxa = await searchTaxa(name);
+    const match = taxa.find((taxon) => taxon.rank === "species" && [taxon.name, taxon.common_name].filter(Boolean).some((candidate) => candidate.toLocaleLowerCase() === name.toLocaleLowerCase()));
+    if (!match) return;
+    const inputs = form.querySelectorAll('.taxonomy-inputs[data-field-id="' + CSS.escape(field.id) + '"] [data-taxonomy-rank]');
+    inputs.forEach((input) => { if (match.taxonomy[input.dataset.taxonomyRank]) input.value = match.taxonomy[input.dataset.taxonomyRank]; });
+    const imported = await importTaxon(match, { keepSearch: true, categoryId: activeCategoryId, quiet: true });
+    formTaxonRecord = imported?.record || null;
+    const fullTaxonomy = formTaxonRecord?.[field.id] || match.taxonomy;
+    inputs.forEach((input) => { if (fullTaxonomy?.[input.dataset.taxonomyRank]) input.value = fullTaxonomy[input.dataset.taxonomyRank]; });
+    showMessage("Datos de " + match.name + " completados desde iNaturalist.");
+    return formTaxonRecord;
+  } catch (error) { showMessage(error.message, true); }
+  finally { formTaxonPending = null; } })();
+  return formTaxonPending;
+}
+const taxonSearch = document.getElementById("taxon-search");
+const taxonResults = document.getElementById("taxon-results");
+taxonSearch.addEventListener("input", () => {
+  clearTimeout(taxonSearchTimer);
+  const query = taxonSearch.value.trim();
+  if (query.length < 2) { taxonResults.hidden = true; return; }
+  taxonSearchTimer = setTimeout(async () => {
+    try {
+      taxonResults.replaceChildren();
+      const localMatches = findLocalTaxa(query);
+      const exactLocalMatches = findExactLocalTaxa(query);
+      if (taxonSearch.value.trim() !== query) return;
+      if (exactLocalMatches.length) {
+        showTaxonMessage("Encontrada en la colección local:");
+        exactLocalMatches.slice(0, 6).forEach(({ category, record, name }) => addTaxonResult({ name, rank: category.title }, "Acceder", () => accessLocalTaxon(category.id, record.id)));
+      } else {
+        const taxa = await searchTaxa(query);
+        if (taxonSearch.value.trim() !== query) return;
+        const exact = taxa.filter((taxon) => [taxon.name, taxon.common_name].filter(Boolean).some((name) => name.toLocaleLowerCase() === query.toLocaleLowerCase()));
+        const exactSpecies = exact.find((taxon) => taxon.rank === "species");
+        if (exactSpecies) {
+          const imported = await importTaxon(exactSpecies, { keepSearch: true });
+          if (taxonSearch.value.trim() !== query) return;
+          showTaxonMessage("No estaba en la colección. Se agregó desde iNaturalist; podés abrirla ahora:");
+          addTaxonResult(exactSpecies, "Acceder ahora", () => openSpeciesPage(imported.category.id, imported.record.id));
+        } else if (exact.length) {
+          showTaxonMessage("No está en la colección local. Podés agregarlo para verlo en la aplicación:");
+          addTaxonResult(exact[0], "Agregar a la colección local", async () => {
+            const imported = await importTaxon(exact[0], { keepSearch: true });
+            openSpeciesPage(imported.category.id, imported.record.id);
+          });
+        } else if (taxa.length) {
+          showTaxonMessage("No está en la colección local. Encontramos estos grupos y especies en iNaturalist:");
+          localMatches.slice(0, 3).forEach(({ category, record, name }) => addTaxonResult({ name, rank: category.title }, "Acceder", () => accessLocalTaxon(category.id, record.id)));
+          taxa.forEach((taxon) => {
+            addTaxonResult(taxon, "Agregar a la colección local", async () => {
+              const imported = await importTaxon(taxon, { keepSearch: true });
+              openSpeciesPage(imported.category.id, imported.record.id);
+            });
+          });
+        } else if (localMatches.length) {
+          showTaxonMessage("No hay una coincidencia exacta en iNaturalist. Coincidencias locales:");
+          localMatches.slice(0, 6).forEach(({ category, record, name }) => addTaxonResult({ name, rank: category.title }, "Acceder", () => accessLocalTaxon(category.id, record.id)));
+        } else showTaxonMessage("No se encontraron especies en la colección ni en iNaturalist.");
+      }
+      taxonResults.hidden = false;
+    } catch (error) { taxonResults.replaceChildren(); const empty = document.createElement("p"); empty.className = "taxon-result-rank"; empty.textContent = error.message; taxonResults.append(empty); taxonResults.hidden = false; }
+  }, 300);
+});
+async function importTaxon(taxon, options = {}) {
+  if (taxon.rank !== "species") throw new Error("Solo se pueden agregar especies con taxonomía completa.");
+  const kingdom = String(taxon.taxonomy?.kingdom || "").toLocaleLowerCase();
+  const iconic = String(taxon.iconic_taxon_name || "").toLocaleLowerCase();
+  const preferredCategoryId = kingdom === "animalia" || iconic === "animalia" || iconic === "mammalia" ? "fauna"
+    : kingdom === "fungi" || iconic === "fungi" ? "mushrooms" : "plants";
+  const category = categories.find((item) => item.id === options.categoryId) || categories.find((item) => item.id === preferredCategoryId) || categories.find((item) => (item.fields || []).some((field) => field.type === "taxonomy"));
+  if (!category) { showMessage("Creá una categoría con campos de nombres y taxonomía antes de importar.", true); return; }
+  const nameField = (category.fields || []).find((field) => field.type === "name");
+  const taxonomyField = (category.fields || []).find((field) => field.type === "taxonomy");
+  if (!nameField || !taxonomyField) { showMessage("La categoría de destino necesita campos de nombres y taxonomía.", true); return; }
+  const response = await request("/api/taxa/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ taxon_id: taxon.id, category_id: options.categoryId || undefined }) });
+  const data = datasets.get(response.category.id);
+  if (!data) throw new Error("No se encontró la categoría local para guardar la especie.");
+  const index = data.items.findIndex((item) => item.id === response.record.id);
+  if (index < 0) data.items.unshift(response.record); else data.items[index] = response.record;
+  const duplicate = index >= 0;
+  const record = response.record;
+  categoryView.collapsed = categoryView.collapsed.filter((id) => id !== category.id); categoryView.stacksHidden = false;
+  render(); await saveCategoryView();
+  if (!options.keepSearch) { taxonSearch.value = ""; taxonResults.hidden = true; }
+  if (!options.quiet) showMessage(duplicate ? "Datos de iNaturalist actualizados en " + response.category.title + "." : "Especie y observaciones agregadas a " + response.category.title + ".");
+  return { category: response.category, record };
 }
 function assetThumb(url, fieldId, isVideo) {
   const thumb = document.createElement("div"); thumb.className = isVideo ? "video-file-thumb" : "picture-thumb";
@@ -397,6 +665,7 @@ function addCoordinateRow(container, point = {}) {
 }
 function openEditor(categoryId, record = null) {
   activeCategoryId = categoryId; editingId = record ? record.id : null; removedAssets = new Map();
+  formTaxonName = ""; formTaxonRecord = null; formTaxonPending = null;
   const category = categories.find((item) => item.id === categoryId);
   document.getElementById("form-category").textContent = category.title.toUpperCase();
   document.getElementById("form-title").textContent = record ? "Editar registro" : "Agregar registro";
@@ -421,7 +690,12 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault(); const button = document.getElementById("save-item"); button.disabled = true;
   try {
     const category = categories.find((item) => item.id === activeCategoryId); const data = datasets.get(activeCategoryId);
-    const existing = data.items.find((item) => item.id === editingId); const item = { id: editingId || createRecordId() };
+    const nameField = (category.fields || []).find((field) => field.type === "name");
+    const nameInput = nameField && form.querySelector('[data-field-id="' + CSS.escape(nameField.id) + '"]');
+    if (nameInput) await populateExactTaxon(nameInput.value.split("\n")[0].trim());
+    const existing = data.items.find((item) => item.id === editingId) || formTaxonRecord; const item = { id: editingId || formTaxonRecord?.id || createRecordId() };
+    if (existing?.inaturalist) item.inaturalist = existing.inaturalist;
+    if (existing?.inaturalist_id) item.inaturalist_id = existing.inaturalist_id;
     for (const field of category.fields || []) {
       if (field.type === "taxonomy") {
         const fields = form.querySelector('.taxonomy-inputs[data-field-id="' + CSS.escape(field.id) + '"]');
@@ -456,7 +730,9 @@ form.addEventListener("submit", async (event) => {
     }
     const hasNameField = (category.fields || []).some((field) => field.type === "name");
     if (hasNameField && !(category.fields || []).filter((field) => field.type === "name").some((field) => item[field.id]?.length)) throw new Error("Agregá al menos un nombre.");
-    data.items = editingId ? data.items.map((current) => current.id === editingId ? item : current) : [item, ...data.items];
+    const taxonomyFields = (category.fields || []).filter((field) => field.type === "taxonomy");
+    if (taxonomyFields.length && !taxonomyFields.some((field) => String(item[field.id]?.species || "").trim())) throw new Error("Completá la especie en Taxonomía. Podés escribir el nombre científico para completar los rangos desde iNaturalist.");
+    data.items = editingId || formTaxonRecord ? data.items.map((current) => current.id === item.id ? item : current) : [item, ...data.items];
     await saveDataset(activeCategoryId); render(); dialog.close(); showMessage("Registro guardado en " + category.title + ".");
   } catch (error) { showMessage(error.message, true); }
   finally { button.disabled = false; }

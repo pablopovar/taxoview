@@ -5,14 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cazadores y recolectores</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand-line"><h1>arraigado en el lugar.</h1><p id="item-count">Abriendo los datos…</p></div>
+    <div class="taxon-search"><input id="taxon-search" type="search" placeholder="Buscar especies o grupos en iNaturalist" aria-label="Buscar especies o grupos en iNaturalist"><div id="taxon-results" class="taxon-results" hidden></div></div>
     <button class="button button-primary" id="new-category" type="button">+ Nueva categoría</button>
   </header>
   <main>
+    <section id="species-page" class="species-page" hidden></section>
     <div class="category-board-wrap">
       <button class="stack-toggle stack-toggle-left" id="hide-stacks-left" type="button" aria-label="Ocultar grupos laterales" title="Ocultar grupos laterales">‹</button>
       <div class="category-board" id="category-board"></div>
