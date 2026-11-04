@@ -1,0 +1,12 @@
+services:
+  cazadores-y-recolectores:
+    build: .
+    container_name: cazadores-y-recolectores
+    restart: unless-stopped
+    ports:
+      - "192.168.2.1:8765:8765"
+    volumes:
+      - ./data:/app/data
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8765
